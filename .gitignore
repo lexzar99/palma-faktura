@@ -1,0 +1,13 @@
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+*.swp
+
+# Logs
+*.log
+
+# Local env files (never commit secrets here)
+.env
+.env.local

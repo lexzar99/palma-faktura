@@ -1,0 +1,784 @@
+:root {
+    --bg-dark: #0D0B14;
+    --surface: #15131C;
+    --primary: #F5A623;
+    --primary-hover: #D48C1C;
+    --secondary: #E8611A;
+    --accent: #7B3FA0;
+    --text-main: #FFFFFF;
+    --text-muted: #A0A0A0;
+    --border: rgba(255, 255, 255, 0.1);
+    --success: #27AE60;
+    --danger: #EB5757;
+    
+    --radius: 12px;
+    --font: 'Outfit', sans-serif;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background-color: var(--bg-dark);
+    color: var(--text-main);
+    font-family: var(--font);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* Views */
+.view {
+    display: none;
+    min-height: 100vh;
+    animation: fadeIn 0.4s ease;
+}
+
+.view.active {
+    display: block;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Typography */
+h1, h2, h3 {
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+}
+
+h1 {
+    font-size: 2rem;
+    background: linear-gradient(45deg, var(--primary), var(--secondary));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+p {
+    color: var(--text-muted);
+}
+
+/* Bolagsväljaren */
+.company-select-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 2rem;
+    text-align: center;
+}
+
+.company-cards {
+    display: flex;
+    gap: 1.5rem;
+    margin-top: 3rem;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.company-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 2.5rem 2rem;
+    width: 280px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.company-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; height: 4px;
+    background: linear-gradient(90deg, var(--accent), var(--secondary), var(--primary));
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.company-card:hover {
+    transform: translateY(-8px);
+    border-color: var(--primary);
+    box-shadow: 0 10px 30px rgba(245, 166, 35, 0.15);
+}
+
+.company-card:hover::before {
+    opacity: 1;
+}
+
+.card-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+}
+
+.company-card h2 {
+    font-size: 1.25rem;
+    color: var(--text-main);
+}
+
+/* Top Nav */
+.top-nav {
+    display: flex;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    background: rgba(26, 22, 37, 0.8);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.top-nav h2 {
+    margin: 0 0 0 1rem;
+    font-size: 1.1rem;
+    color: var(--primary);
+}
+
+/* PDF Preview */
+.preview-actions {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    padding: 1rem;
+    background: rgba(255,255,255,0.05);
+    border-radius: 12px;
+    margin-bottom: 1rem;
+}
+
+@media (max-width: 600px) {
+    .preview-actions { flex-direction: column; }
+    .preview-actions .btn-primary { width: 100%; text-align: center; }
+}
+
+.pdf-wrapper {
+    width: 100%;
+    overflow-x: auto;
+    padding: 2rem 0;
+    display: flex;
+    justify-content: center;
+    background: #0D0B14; /* Darker background to pop the A4 */
+}
+
+.pdf-scale-container {
+    transform-origin: top center;
+    transition: transform 0.2s ease;
+}
+
+/* Forms & UI */
+.form-container {
+    max-width: 800px;
+    margin: 1.5rem auto;
+    padding: 0 1rem 120px 1rem;
+}
+
+.card-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.card-section h3 {
+    margin-bottom: 1rem;
+    color: var(--primary);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.5rem;
+}
+
+.row {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+}
+
+.input-group.third { flex: 1; min-width: 120px; }
+.input-group.half { flex: 1; min-width: 200px; }
+.input-group.full { flex: 100%; }
+
+@media (max-width: 600px) {
+    .row { flex-direction: column; gap: 1rem; }
+    .dash-header-flex { flex-direction: column; align-items: center; text-align: center; gap: 1.5rem; }
+    .dash-btns { width: 100%; display: flex; flex-direction: column; gap: 1rem; }
+    .meta-grid { grid-template-columns: 1fr !important; }
+    .totals-section { width: 100%; }
+}
+
+.input-group {
+    margin-bottom: 1.2rem;
+    display: flex;
+    flex-direction: column;
+}
+
+.input-group label {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    margin-bottom: 0.4rem;
+}
+
+input, textarea, select {
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--border);
+    color: var(--text-main);
+    padding: 0.8rem 1rem;
+    border-radius: 8px;
+    font-family: var(--font);
+    font-size: 1rem;
+    transition: border 0.2s, box-shadow 0.2s;
+}
+
+input:focus, textarea:focus, select:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(245, 166, 35, 0.2);
+}
+
+.mt-2 { margin-top: 0.5rem; }
+.mt-4 { margin-top: 1.5rem; }
+
+/* Buttons */
+button {
+    font-family: var(--font);
+    cursor: pointer;
+    border: none;
+    border-radius: 8px;
+    padding: 0.8rem 1.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+    transition: all 0.2s;
+}
+
+.btn-primary {
+    background: linear-gradient(90deg, var(--secondary), var(--primary));
+    color: #000;
+}
+
+.btn-primary:active { transform: scale(0.98); }
+.btn-primary:hover {
+    box-shadow: 0 4px 15px rgba(245, 166, 35, 0.4);
+}
+
+.btn-secondary {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-main);
+}
+
+.btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: var(--primary);
+}
+
+.icon-btn {
+    background: transparent;
+    color: var(--text-muted);
+    padding: 0.5rem;
+}
+
+.icon-btn:hover {
+    color: var(--text-main);
+}
+
+.actions.bottom-sticky {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    padding: 1.5rem;
+    background: rgba(21, 19, 28, 0.95);
+    backdrop-filter: blur(10px);
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: center;
+    z-index: 90;
+}
+
+.actions.bottom-sticky .btn-primary {
+    max-width: 400px;
+    width: 100%;
+}
+
+/* Dashboard & List Styling */
+.section-header-flex, .dash-header-flex {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.5rem;
+}
+
+.dash-header-flex h1 { margin: 0; }
+.card-section.flex-header h3 { border-bottom: none; margin-bottom: 0; }
+
+.menu-picker-container {
+    background: rgba(0,0,0,0.15);
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-top: 1rem;
+}
+
+.input-group input, .input-group select, .input-group textarea {
+    width: 100%;
+    height: 50px; /* Standardize height for all inputs including date */
+    padding: 0 1rem;
+    background: #000;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-main);
+    font-family: inherit;
+    font-size: 1.1rem; /* Slightly larger for easier mobile interaction */
+    transition: all 0.2s ease;
+    box-sizing: border-box;
+}
+
+.input-group textarea {
+    height: auto;
+    padding: 1rem;
+}
+
+
+/* Native Date Picker Icon Tuning */
+input[type="date"]::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    background-color: #fff;
+    padding: 5px;
+    border-radius: 3px;
+    filter: invert(0.8) sepia(100%) saturate(1000%) hue-rotate(30deg); /* Make it more gold/white */
+    transform: scale(1.5); /* Make it bigger */
+}
+
+input[type="date"] {
+    position: relative;
+    cursor: pointer;
+}
+
+.large-customer-select {
+    width: 100%;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-main);
+    transition: all 0.2s;
+}
+
+.large-customer-select:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(245, 166, 35, 0.2);
+}
+
+.invoice-list { display: flex; flex-direction: column; gap: 0.8rem; }
+.empty-state { color: var(--text-muted); font-style: italic; }
+
+.invoice-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(0,0,0,0.2);
+    border: 1px solid var(--border);
+    padding: 1rem;
+    border-radius: 8px;
+    transition: all 0.2s;
+}
+.invoice-item:hover { border-color: var(--primary); background: rgba(0,0,0,0.4); }
+.inv-main { flex: 1; }
+.inv-no { font-weight: bold; color: var(--primary); margin-right: 0.5rem; }
+.inv-cust { font-weight: 600; color: var(--text-main); }
+.inv-date { font-size: 0.8rem; color: var(--text-muted); display: block; margin-top: 0.2rem;}
+.inv-amt { font-size: 1.1rem; font-weight: bold; margin: 0 1rem; }
+
+/* Form Toggle & Items */
+.switch-container {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.switch-label {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+.switch-label.active-label {
+    color: var(--primary);
+    font-weight: 600;
+}
+
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+}
+.switch input { opacity: 0; width: 0; height: 0; }
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: #444;
+    transition: .4s;
+    border-radius: 24px;
+}
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 18px; width: 18px;
+    left: 3px; bottom: 3px;
+    background-color: white;
+    transition: .4s;
+    border-radius: 50%;
+}
+input:checked + .slider {
+    background-color: var(--primary);
+}
+input:checked + .slider:before {
+    transform: translateX(20px);
+}
+
+.checkbox-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.checkbox-group input { width: auto; transform: scale(1.2); margin: 0; }
+.checkbox-group label { color: var(--text-muted); font-size: 0.9rem; cursor: pointer; margin: 0; }
+
+.item-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr auto;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    align-items: center;
+}
+
+.item-row input, .item-row select {
+    padding: 0.6rem;
+}
+
+.remove-btn {
+    background: transparent;
+    color: #e74c3c;
+    font-size: 1.2rem;
+    padding: 0.5rem;
+}
+
+.preview-actions {
+    text-align: center;
+    padding: 2rem 0;
+}
+
+.glow {
+    box-shadow: 0 0 20px rgba(245, 166, 35, 0.5);
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { box-shadow: 0 0 15px rgba(245, 166, 35, 0.3); }
+    50% { box-shadow: 0 0 25px rgba(245, 166, 35, 0.6); }
+    100% { box-shadow: 0 0 15px rgba(245, 166, 35, 0.3); }
+}
+
+.pdf-wrapper {
+    overflow-x: auto;
+    padding: 0 1rem 4rem 1rem;
+    display: flex;
+    justify-content: center;
+}
+
+/* -------------------------------------------
+   PROFESSIONAL PDF DESIGN (MODERN COMPACT)
+------------------------------------------- */
+.a4-page {
+    width: 210mm;
+    min-height: 297mm;
+    background: #fff;
+    color: #2b2b2b;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    position: relative;
+    box-sizing: border-box;
+}
+
+.prof-design {
+    font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    color: #222;
+    padding: 22mm 20mm 40mm 20mm; /* Clean margins, extra bottom padding for footer */
+}
+
+.top-edge-accent {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 12px;
+    background: #1e1f26; /* Dark slate */
+}
+
+.pdf-prof-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 30px;
+    border-bottom: 2px solid #f0f0f0;
+    padding-bottom: 20px;
+}
+
+.sender-info h1 {
+    font-size: 24px;
+    color: #111;
+    margin: 0 0 6px 0;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+}
+.sender-info p { color: #666; font-size: 10px; line-height: 1.5; margin: 0; }
+
+.invoice-meta { text-align: right; }
+.invoice-meta h2 {
+    font-size: 26px;
+    color: #111;
+    font-weight: 900;
+    letter-spacing: 2px;
+    margin: 0 0 10px 0;
+    text-transform: uppercase;
+}
+
+.meta-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.3rem 1rem;
+    font-size: 0.85rem;
+    text-align: right;
+    color: #555;
+}
+.meta-grid span:nth-child(odd) {
+    color: #888;
+}
+.meta-grid span:nth-child(even), .meta-grid strong {
+    color: #222;
+    font-weight: 600;
+}
+
+.pdf-prof-customer { margin-bottom: 25px; }
+.pdf-prof-customer h3 {
+    font-size: 10px; color: #888; text-transform: uppercase;
+    margin-bottom: 6px; 
+}
+.customer-box {
+    padding: 12px 16px;
+    background: #f8f9fa;
+    border-radius: 4px;
+    border-left: 4px solid #1e1f26;
+    width: 55%;
+}
+.customer-box h4 { font-size: 14px; margin: 0 0 4px 0; color: #111; font-weight: 600; }
+.customer-box p { font-size: 11px; color: #444; margin: 0 0 2px 0; line-height: 1.3; }
+
+.pdf-prof-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+.pdf-prof-table th {
+    background: #f8f9fa;
+    border-bottom: 2px solid #ddd;
+    border-top: 1px solid #eee;
+    font-size: 9px;
+    font-weight: 700;
+    color: #444;
+    text-transform: uppercase;
+    padding: 6px 8px; /* Compact padding */
+    text-align: left;
+}
+.pdf-prof-table td {
+    border-bottom: 1px solid #f2f2f2;
+    padding: 5px 8px; /* Extremely compact to fit many items */
+    font-size: 10px;
+    color: #222;
+    line-height: 1.2;
+}
+
+.pdf-prof-summary-wrapper {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 20px;
+}
+.pdf-prof-summary {
+    width: 300px;
+}
+.summary-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 10px;
+    font-size: 11px;
+    color: #555;
+    border-bottom: 1px dashed #eee;
+}
+.grand-total-row {
+    background: #1e1f26;
+    margin-top: 8px;
+    font-weight: 800;
+    font-size: 16px;
+    color: #fff;
+    padding: 12px 15px;
+    border-bottom: none;
+    border-radius: 4px;
+}
+
+.pdf-payment-instruction {
+    margin-top: 15px;
+    padding: 15px;
+    background: #fffdf5; /* Subtle highlight yellow/cream */
+    border: 1px solid #e1decb;
+    border-radius: 6px;
+    text-align: center;
+    color: #555;
+    font-size: 12px;
+}
+.huge-invoice-no {
+    display: block;
+    font-size: 26px;
+    font-weight: 900;
+    color: #111;
+    margin-top: 5px;
+    letter-spacing: 1px;
+}
+
+.pdf-prof-footer {
+    position: absolute;
+    bottom: 20mm; left: 20mm; right: 20mm;
+    border-top: 1px solid #999;
+    padding-top: 20px;
+    display: flex;
+    justify-content: space-between; /* Evenly distribute 3 blocks */
+    gap: 1rem;
+}
+.footer-col {
+    font-size: 11px;
+    line-height: 1.5;
+    color: #333;
+    flex: 1; /* Distribute space evenly among the 3 columns */
+}
+.footer-col strong { 
+    color: #000; 
+    text-transform: uppercase; 
+    font-size: 10px; 
+    display: block; 
+    margin-bottom: 8px; 
+    border-bottom: 2px solid #eee; 
+    padding-bottom: 4px;
+}
+
+/* Mobile responsive */
+@media (max-width: 600px) {
+    .item-row {
+        grid-template-columns: 1fr;
+        background: rgba(255,255,255,0.02);
+        padding: 1rem;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+        border: 1px solid var(--border);
+    }
+    
+    .invoice-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.8rem;
+    }
+    .invoice-item .inv-amt { margin-left: 0; font-size: 1.1rem; }
+
+    .pdf-prof-summary-wrapper {
+        justify-content: flex-end;
+    }
+    .pdf-prof-summary { width: 100%; }
+}
+
+/* Modal styles for Rent Invoice Popup */
+.modal-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(4px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+
+.modal-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.modal-content {
+    background: #15131C;
+    padding: 2rem;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 400px;
+    border: 1px solid rgba(245, 166, 35, 0.3);
+    box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+    transform: translateY(20px);
+    transition: transform 0.3s ease;
+}
+
+.modal-overlay.active .modal-content {
+    transform: translateY(0);
+}
+
+.modal-content h2 {
+    color: var(--primary);
+    margin-bottom: 0.5rem;
+    font-size: 1.5rem;
+}
+
+/* Payment Highlighting in PDF - Ultra-Flat Design (No Black Boxes) */
+.payment-box {
+    background: transparent !important;
+    border: none !important;
+    padding: 0;
+    border-radius: 0;
+    color: #000000 !important;
+    display: block;
+    width: 100%;
+    text-align: inherit; /* inherit from col center info */
+    box-shadow: none !important;
+    white-space: nowrap;
+}
+
+.payment-box strong {
+    color: #000000 !important;
+    letter-spacing: 1px;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    display: block;
+    margin-bottom: 5px;
+}
+
+.bg-large {
+    font-size: 1.8rem;
+    font-weight: 900;
+    line-height: 1.1;
+    display: block;
+    margin: 0.3rem 0;
+    color: #000000 !important;
+}
+
+.payment-box small {
+    display: block;
+    font-size: 0.95rem;
+    font-weight: 800;
+    color: #333333 !important;
+    margin-top: 0.8rem;
+    padding-top: 0.8rem;
+    border-top: 2px solid #000000;
+    text-transform: uppercase;
+}
+
+.pdf-prof-footer .footer-col {
+    font-size: 0.75rem;
+    line-height: 1.4;
+}
+

@@ -1,0 +1,371 @@
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PALMA Faktura</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌴</text></svg>">
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <!-- Firebase SDK (compat mode — no build step needed) -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+
+    <!-- Firebase Config — PASTE YOUR CONFIG HERE -->
+    <script>
+        const firebaseConfig = {
+            apiKey: "PASTE_YOUR_API_KEY",
+            authDomain: "PASTE_YOUR_AUTH_DOMAIN",
+            projectId: "PASTE_YOUR_PROJECT_ID",
+            storageBucket: "PASTE_YOUR_STORAGE_BUCKET",
+            messagingSenderId: "PASTE_YOUR_MESSAGING_SENDER_ID",
+            appId: "PASTE_YOUR_APP_ID"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const auth = firebase.auth();
+    </script>
+</head>
+<body>
+
+<!-- Firebase Loading Overlay -->
+<div id="firebase-loading" style="
+    position: fixed; inset: 0; z-index: 9999;
+    background: #0D0B14;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 1rem; color: #fff;
+    font-family: 'Outfit', sans-serif;
+">
+    <span style="font-size: 3rem;">🌴</span>
+    <span style="font-size: 1.1rem; color: #F5A623; font-weight: 600;">Laddar PALMA Faktura...</span>
+    <div style="width: 40px; height: 4px; background: #1e1c2a; border-radius: 2px; overflow: hidden;">
+        <div style="width: 100%; height: 100%; background: #F5A623; animation: loadbar 1.5s ease-in-out infinite;"></div>
+    </div>
+    <style>@keyframes loadbar { 0%,100%{transform:translateX(-100%)} 50%{transform:translateX(100%)} }</style>
+</div>
+
+<div id="app">
+    <!-- View 1: Välj Company -->
+    <section id="view-select-company" class="view active">
+        <div class="company-select-container">
+            <h1>Välj bolag</h1>
+            <p>Vem fakturerar du ifrån idag?</p>
+            <div class="company-cards">
+                <div class="company-card" onclick="selectCompany('palma')" tabindex="0">
+                    <div class="card-icon">🌴</div>
+                    <h2>Palma De lund HB</h2>
+                    <p>Org.nr: 969790-2923</p>
+                </div>
+                <div class="company-card" onclick="selectCompany('palmyra')" tabindex="0">
+                    <div class="card-icon">🍕</div>
+                    <h2>Palmyra Pizzeria AB</h2>
+                    <p>Org.nr: 559419-8417</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- View 2: Dashboard -->
+    <section id="view-dashboard" class="view">
+        <header class="top-nav">
+            <button class="icon-btn" onclick="goBack('view-select-company')">← Byt bolag</button>
+            <h2 id="dash-company-name">Företag</h2>
+        </header>
+
+        <div class="form-container">
+            <div class="dash-header-flex">
+                <h1>Dina Fakturor</h1>
+                <div class="dash-btns">
+                    <button id="btn-rent-invoice" class="btn-secondary" style="display: none;" onclick="openRentModal()">🏠 Ny Hyresfaktura</button>
+                    <button class="btn-primary" onclick="startNewInvoice()">+ Ny Faktura</button>
+                </div>
+            </div>
+            
+            <div class="card-section">
+                <h3>Skapade fakturor</h3>
+                <div id="invoice-list-container" class="invoice-list">
+                    <!-- Injected via JS -->
+                    <p class="empty-state">Inga fakturor än.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- View 3: Invoice Form -->
+    <section id="view-invoice-form" class="view">
+        <header class="top-nav">
+            <button class="icon-btn" onclick="goBack('view-dashboard')">← Dashboard</button>
+            <h2 id="active-company-name">Företag</h2>
+        </header>
+
+        <div class="form-container">
+            <h1>Skapa Faktura</h1>
+            
+            <form id="invoice-form" onsubmit="event.preventDefault(); previewInvoice();">
+                <!-- Kundsektion -->
+                <div class="card-section">
+                    <div class="section-header-flex" style="border-bottom: none; margin-bottom: 0;">
+                        <h3>Mottagare (Kund)</h3>
+                    </div>
+                    
+                    <div class="input-group full">
+                        <select id="saved-customer-select" class="large-customer-select" onchange="populateCustomerForm()">
+                            <option value="">-- Välj sparad kund (eller fyll i ny nedan) --</option>
+                        </select>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="customer-name">Företagsnamn (t.ex. Coop)</label>
+                        <input type="text" id="customer-name" required placeholder="Företagsnamn">
+                    </div>
+                    <div class="row">
+                        <div class="input-group third">
+                            <label for="customer-no">Kundnummer (frivilligt)</label>
+                            <input type="text" id="customer-no" placeholder="Kundnr">
+                        </div>
+                        <div class="input-group third">
+                            <label for="customer-org">Org.nummer (frivilligt)</label>
+                            <input type="text" id="customer-org" placeholder="xxxxxx-xxxx">
+                        </div>
+                        <div class="input-group third">
+                            <label for="customer-ref">Er referens (frivilligt)</label>
+                            <input type="text" id="customer-ref" placeholder="Referens">
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="input-group full">
+                            <label for="customer-street">Gatuadress</label>
+                            <input type="text" id="customer-street" required placeholder="Gata & Gatunummer">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="input-group half">
+                            <label for="customer-zip">Postnummer</label>
+                            <input type="text" id="customer-zip" required placeholder="123 45">
+                        </div>
+                        <div class="input-group half">
+                            <label for="customer-city">Ort</label>
+                            <input type="text" id="customer-city" required placeholder="Stad">
+                        </div>
+                    </div>
+                    
+                    <div class="checkbox-group mt-2">
+                        <input type="checkbox" id="save-customer-cb" checked>
+                        <label for="save-customer-cb">Spara mottagare till nästa gång</label>
+                    </div>
+                </div>
+
+                <!-- Fakturadetaljer -->
+                <div class="card-section">
+                    <h3>Fakturadetaljer</h3>
+                    <div class="row">
+                        <div class="input-group third">
+                            <label for="invoice-no">Fakturanr.</label>
+                            <input type="text" id="invoice-no" required>
+                        </div>
+                        <div class="input-group half">
+                            <label for="invoice-date">Fakturadatum</label>
+                            <input type="date" id="invoice-date" required onchange="updateDaysNetText()" onclick="if(this.showPicker) this.showPicker()">
+                        </div>
+                        <div class="input-group half">
+                            <label for="due-date">Förfallodatum</label>
+                            <input type="date" id="due-date" required onchange="updateDaysNetText()" onclick="if(this.showPicker) this.showPicker()">
+                        </div>
+                    </div>
+                    <p style="font-size: 0.8rem; color: var(--text-muted); text-align: right;" id="days-net-preview">Betalningsvillkor: 20 dagar netto</p>
+                </div>
+
+                <!-- Fakturarader -->
+                <div class="card-section">
+                    <div class="section-header-flex">
+                        <h3>Fakturarader</h3>
+                        <div class="switch-container">
+                            <span class="switch-label" id="label-exkl">Exkl</span>
+                            <label class="switch">
+                                <input type="checkbox" id="tax-inclusive-toggle" checked onchange="toggleTaxMode()">
+                                <span class="slider round"></span>
+                            </label>
+                            <span class="switch-label active-label" id="label-inkl">Inkl</span>
+                        </div>
+                    </div>
+
+                    <div class="menu-picker-container">
+                        <div class="row" style="align-items: center; margin-bottom: 0.8rem;">
+                            <div class="input-group half" style="margin-bottom: 0;">
+                                <select id="menu-category" onchange="updateMenuItems()">
+                                    <option value="">-- Kategori --</option>
+                                </select>
+                            </div>
+                            <div class="input-group half" style="margin-bottom: 0;">
+                                <select id="menu-item" disabled>
+                                    <option value="">-- Välj rätt --</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row" style="align-items: flex-end; justify-content: space-between;">
+                            <div class="row" style="align-items: center; gap: 0.5rem; flex: 1;">
+                                <div class="input-group" style="margin-bottom: 0; flex: 1;">
+                                    <label style="font-size: 0.75rem;">Moms %</label>
+                                    <select id="menu-vat">
+                                        <option value="25">25%</option>
+                                        <option value="12" selected>12%</option>
+                                        <option value="6">6%</option>
+                                    </select>
+                                </div>
+                                <div class="input-group" style="margin-bottom: 0; width: 70px;">
+                                    <label style="font-size: 0.75rem;">Antal</label>
+                                    <input type="number" id="menu-qty" value="1" min="1">
+                                </div>
+                            </div>
+                            <button type="button" class="btn-primary btn-small" onclick="addFromMenu()">+ LÄGG TILL</button>
+                        </div>
+                    </div>
+                    
+                    <div id="invoice-items">
+                        <!-- Items will be injected here -->
+                    </div>
+                    <button type="button" class="btn-secondary mt-4" onclick="addInvoiceItem()">+ Lägg till rad</button>
+                    
+                    <div class="totals-preview mt-4">
+                        <p>Total ex moms: <span id="total-net">0.00</span> kr</p>
+                        <p>Total moms: <span id="total-vat">0.00</span> kr</p>
+                        <p class="grand-total">Att betala: <span id="total-gross">0.00</span> kr</p>
+                    </div>
+                </div>
+
+                <div class="actions bottom-sticky">
+                    <button type="submit" class="btn-primary">Spara & Granska PDF</button>
+                </div>
+            </form>
+        </div>
+    </section>
+
+    <!-- View 4: Invoice Preview -->
+    <section id="view-invoice-preview" class="view">
+        <header class="top-nav">
+            <button id="btn-preview-back" class="icon-btn" onclick="goBack('view-invoice-form')">← Fixa</button>
+            <button class="icon-btn" style="margin-left: 0.5rem;" onclick="goBack('view-dashboard')">Dashboard</button>
+            <h2 style="margin-left:auto; margin-right: 0.5rem;">Granska</h2>
+        </header>
+        
+        <div class="preview-actions">
+           <button class="btn-primary glow" onclick="exportPDF()">Ladda ner PDF</button>
+        </div>
+
+        <div class="pdf-wrapper">
+            <!-- Scaling container for mobile -->
+            <div id="pdf-scale-container" class="pdf-scale-container">
+                <div id="pdf-paper" class="a4-page prof-design">
+                    <div class="top-edge-accent"></div>
+                    
+                    <div class="pdf-prof-header">
+                        <div class="sender-info">
+                            <h1 id="pdf-sender-name">Palma De lund HB</h1>
+                            <p>kiliansgatan 14<br>223 50 LUND<br>Org.nr: <span id="pdf-sender-org">969790-2923</span></p>
+                        </div>
+                        <div class="invoice-meta">
+                            <h2>FAKTURA</h2>
+                            <div class="meta-grid">
+                                <span>Fakturanummer:</span> <strong id="pdf-no">1001</strong>
+                                <span>Kundnummer:</span> <strong id="pdf-cust-no"></strong>
+                                <span>Fakturadatum:</span> <span id="pdf-date"></span>
+                                <span>Förfallodatum:</span> <span id="pdf-due"></span>
+                                <span>Er referens:</span> <strong id="pdf-ref"></strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="pdf-prof-customer" style="display: flex; justify-content: space-between; align-items: flex-end;">
+                        <div style="width: 55%;">
+                            <h3>Faktureras till:</h3>
+                            <div class="customer-box" style="width: 100%;">
+                                <h4 id="pdf-customer-name">Kundnamn</h4>
+                                <p id="pdf-customer-org"></p>
+                                <p id="pdf-customer-street"></p>
+                                <p id="pdf-customer-zipcity"></p>
+                            </div>
+                        </div>
+                        
+                        <div class="pdf-payment-instruction">
+                            Vänligen ange fakturanummer vid betalning:
+                            <strong id="pdf-pay-instruction-no" class="huge-invoice-no"></strong>
+                        </div>
+                    </div>
+
+                    <table class="pdf-prof-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 45%;">Beskrivning</th>
+                                <th style="width: 10%; text-align: center;">Moms</th>
+                                <th style="width: 15%; text-align: right;">À-pris</th>
+                                <th style="width: 10%; text-align: right;">Antal</th>
+                                <th style="width: 20%; text-align: right;">Belopp</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pdf-items-tbody"></tbody>
+                    </table>
+
+                    <div class="pdf-prof-summary-wrapper">
+                        <div class="pdf-prof-summary">
+                            <div class="summary-row"><span>Netto (exkl. moms)</span><span><span id="pdf-total-net"></span> kr</span></div>
+                            <div class="summary-row"><span>Total Moms</span><span><span id="pdf-total-vat"></span> kr</span></div>
+                            <div class="summary-row grand-total-row"><span>Att Betala</span><span><span id="pdf-total-gross"></span> kr</span></div>
+                        </div>
+                    </div>
+
+                    <div class="pdf-prof-footer" id="pdf-footer-container"></div>
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+
+<!-- RENT INVOICE MODAL -->
+<div id="rent-modal" class="modal-overlay">
+    <div class="modal-content">
+        <h2>Skapa Hyresfaktura</h2>
+        <div class="form-group">
+            <label>Avser Månad</label>
+            <select id="rent-month">
+                <option value="Januari">Januari</option>
+                <option value="Februari">Februari</option>
+                <option value="Mars">Mars</option>
+                <option value="April">April</option>
+                <option value="Maj">Maj</option>
+                <option value="Juni">Juni</option>
+                <option value="Juli">Juli</option>
+                <option value="Augusti">Augusti</option>
+                <option value="September">September</option>
+                <option value="Oktober">Oktober</option>
+                <option value="November">November</option>
+                <option value="December">December</option>
+            </select>
+        </div>
+        <div class="row">
+            <div class="input-group half">
+                <label>Fakturadatum</label>
+                <input type="date" id="rent-date" onclick="if(this.showPicker) this.showPicker()">
+            </div>
+            <div class="input-group half">
+                <label>Förfallodatum</label>
+                <input type="date" id="rent-due" onclick="if(this.showPicker) this.showPicker()">
+            </div>
+        </div>
+        <div class="form-group">
+            <label>Belopp inkl. moms</label>
+            <input type="number" id="rent-amount" placeholder="t.ex. 15000">
+        </div>
+        <div class="row" style="margin-top: 1.5rem;">
+            <button class="btn-primary" style="flex: 1;" onclick="generateRentInvoice()">Generera PDF</button>
+            <button class="btn-secondary" style="flex: 0.5;" onclick="closeRentModal()">Avbryt</button>
+        </div>
+    </div>
+</div>
+
+<script src="app.js?v=21.0"></script>
+</body>
+</html>
