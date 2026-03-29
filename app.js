@@ -233,6 +233,12 @@ function initApp() {
     // Listen to Firebase Auth state
     auth.onAuthStateChanged(async (user) => {
         if (user) {
+            // Force logout old anonymous sessions
+            if (user.isAnonymous) {
+                console.log("Found old anonymous session, logging out...");
+                await auth.signOut();
+                return;
+            }
             // Logged in! Fetch data
             try {
                 const uid = user.uid;
@@ -289,6 +295,15 @@ async function loginUser() {
         btn.textContent = 'Logga In';
         btn.disabled = false;
         console.error("Login Error:", err);
+    }
+}
+
+// Logout function
+async function logoutUser() {
+    try {
+        await auth.signOut();
+    } catch (err) {
+        console.error("Logout error", err);
     }
 }
 
