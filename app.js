@@ -214,36 +214,80 @@ const FIREBASE_READY = (
 let invoices = [];
 let customers = [];
 
-async function initApp() {
-    try {
-        if (FIREBASE_READY) {
-            // Sign in anonymously (silent, no login screen)
-            await auth.signInAnonymously();
-            const uid = auth.currentUser.uid;
+function showLoader(show) {
+    const loader = document.getElementById('firebase-loading');
+    if (loader) loader.style.display = show ? 'flex' : 'none';
+}
 
-            // Load invoices
-            const invSnap = await db.collection('users').doc(uid).collection('invoices').orderBy('date', 'desc').get();
-            invoices = invSnap.docs.map(d => ({ firestoreId: d.id, ...d.data() }));
-
-            // Load customers
-            const custSnap = await db.collection('users').doc(uid).collection('customers').get();
-            customers = custSnap.docs.map(d => ({ firestoreId: d.id, ...d.data() }));
-        } else {
-            // Fallback: localStorage (works offline / before Firebase is configured)
-            invoices = JSON.parse(localStorage.getItem('faktura_invoices') || '[]');
-            customers = JSON.parse(localStorage.getItem('faktura_customers') || '[]');
-        }
-    } catch (err) {
-        console.warn('Firebase error, falling back to localStorage:', err);
+function initApp() {
+    if (!FIREBASE_READY) {
+        // Fallback: localStorage (works offline / before Firebase is configured)
         invoices = JSON.parse(localStorage.getItem('faktura_invoices') || '[]');
         customers = JSON.parse(localStorage.getItem('faktura_customers') || '[]');
+        showLoader(false);
+        showView('view-select-company');
+        loadSavedCustomers();
+        return;
     }
 
-    // Hide loading overlay
-    const loader = document.getElementById('firebase-loading');
-    if (loader) loader.style.display = 'none';
+    // Listen to Firebase Auth state
+    auth.onAuthStateChanged(async (user) => {
+        if (user) {
+            // Logged in! Fetch data
+            try {
+                const uid = user.uid;
+                
+                const invSnap = await db.collection('users').doc(uid).collection('invoices').orderBy('date', 'desc').get();
+                invoices = invSnap.docs.map(d => ({ firestoreId: d.id, ...d.data() }));
 
-    loadSavedCustomers();
+                const custSnap = await db.collection('users').doc(uid).collection('customers').get();
+                customers = custSnap.docs.map(d => ({ firestoreId: d.id, ...d.data() }));
+                
+                showLoader(false);
+                showView('view-select-company');
+                loadSavedCustomers();
+            } catch (err) {
+                console.error("Error loading data from Firestore:", err);
+                showLoader(false);
+            }
+        } else {
+            // Not logged in -> Show login view
+            showLoader(false);
+            showView('view-login');
+        }
+    });
+}
+
+// Login Function called from view-login
+async function loginUser() {
+    const email = document.getElementById('login-email').value;
+    const password = document.getElementById('login-password').value;
+    const errDiv = document.getElementById('login-error');
+    errDiv.style.display = 'none';
+
+    if (!email || !password) {
+        errDiv.textContent = 'Ange både e-post och lösenord.';
+        errDiv.style.display = 'block';
+        return;
+    }
+    
+    const btn = document.getElementById('btn-login');
+    btn.textContent = 'Loggar in...';
+    btn.disabled = true;
+
+    try {
+        await auth.signInWithEmailAndPassword(email, password);
+        // onAuthStateChanged will handle the rest
+        btn.textContent = 'Logga In';
+        btn.disabled = false;
+        showLoader(true);
+    } catch (err) {
+        errDiv.textContent = 'Fel e-post eller lösenord.';
+        errDiv.style.display = 'block';
+        btn.textContent = 'Logga In';
+        btn.disabled = false;
+        console.error("Login Error:", err);
+    }
 }
 
 // Helper: save invoice to Firestore (or localStorage fallback)

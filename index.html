@@ -48,8 +48,22 @@
 </div>
 
 <div id="app">
+    <!-- View 0: Inloggning -->
+    <section id="view-login" class="view active">
+        <div class="company-select-container">
+            <h1>Logga In</h1>
+            <p>Ange din företagse-post och lösenord.</p>
+            <div style="max-width: 300px; margin: 2rem auto; display: flex; flex-direction: column; gap: 1rem;">
+                <input type="email" id="login-email" placeholder="E-postadress" style="padding: 1rem; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-dark); color: #fff; font-size: 1rem;">
+                <input type="password" id="login-password" placeholder="Lösenord" style="padding: 1rem; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-dark); color: #fff; font-size: 1rem;">
+                <button class="btn-primary" onclick="loginUser()" id="btn-login">Logga In</button>
+                <div id="login-error" style="color: var(--danger); font-size: 0.9rem; margin-top: 0.5rem; display: none;"></div>
+            </div>
+        </div>
+    </section>
+
     <!-- View 1: Välj Company -->
-    <section id="view-select-company" class="view active">
+    <section id="view-select-company" class="view">
         <div class="company-select-container">
             <h1>Välj bolag</h1>
             <p>Vem fakturerar du ifrån idag?</p>
@@ -364,8 +378,6 @@
             <button class="btn-secondary" style="flex: 0.5;" onclick="closeRentModal()">Avbryt</button>
         </div>
     </div>
-</div>
-
-<script src="app.js?v=21.0"></script>
+<script src="app.js?v=23.0"></script>
 </body>
 </html>
