@@ -248,7 +248,9 @@ function initApp() {
                 loadSavedCustomers();
             } catch (err) {
                 console.error("Error loading data from Firestore:", err);
+                alert("Kunde inte ladda fakturor från databasen. Felmeddelande: " + err.message);
                 showLoader(false);
+                showView('view-select-company');
             }
         } else {
             // Not logged in -> Show login view
