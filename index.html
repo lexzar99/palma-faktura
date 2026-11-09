@@ -127,7 +127,7 @@
         </header>
 
         <div class="form-container">
-            <h1>Skapa Faktura</h1>
+            <h1 id="invoice-form-title">Skapa Faktura</h1>
             
             <form id="invoice-form" onsubmit="event.preventDefault(); previewInvoice();">
                 <!-- Kundsektion -->
@@ -253,7 +253,11 @@
                     <div id="invoice-items">
                         <!-- Items will be injected here -->
                     </div>
-                    <button type="button" class="btn-secondary mt-4" onclick="addInvoiceItem()">+ Lägg till rad</button>
+                    <p class="drag-hint">Dra i ⠿ för att ändra ordning på raderna.</p>
+                    <div class="row-buttons mt-4">
+                        <button type="button" class="btn-secondary" onclick="addInvoiceItem()">+ Lägg till rad</button>
+                        <button type="button" class="btn-secondary" onclick="addTextRow()">+ Lägg till text</button>
+                    </div>
                     
                     <div class="totals-preview mt-4">
                         <p>Total ex moms: <span id="total-net">0.00</span> kr</p>
@@ -389,7 +393,7 @@
             <button class="btn-secondary" style="flex: 0.5;" onclick="closeRentModal()">Avbryt</button>
         </div>
     </div>
-<script src="app.js?v=26.0"></script>
+<script src="app.js?v=27.0"></script>
 <script>
     // Register service worker (PWA: installable + offline app shell)
     if ('serviceWorker' in navigator) {

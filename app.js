@@ -202,6 +202,7 @@ const MENU_DATA = {
 
 let currentCompany = null;
 let invoiceItems = [];
+let editingInvoiceId = null; // set when an existing invoice is opened in the editor
 let isTaxInclusive = true;
 
 // --- Firebase Data Layer ---
@@ -411,18 +412,23 @@ function renderDashboard() {
         div.className = 'invoice-item';
         div.innerHTML = `
             <div class="inv-main">
-                <span class="inv-no">#${inv.no}</span>
-                <span class="inv-cust">${inv.customerName}</span>
-                <span class="inv-date">${inv.date}</span>
+                <span class="inv-no">#${escapeHtml(inv.no)}</span>
+                <span class="inv-cust">${escapeHtml(inv.customerName)}</span>
+                <span class="inv-date">${escapeHtml(inv.date)}</span>
             </div>
-            <div class="inv-amt">${inv.total.toFixed(2)} kr</div>
-            <button class="btn-secondary btn-small" onclick="viewSavedInvoice('${inv.id}')">Visa PDF</button>
+            <div class="inv-amt">${(Number(inv.total) || 0).toFixed(2)} kr</div>
+            <div class="inv-actions">
+                <button class="btn-secondary btn-small" onclick="editSavedInvoice('${inv.id}')">✎ Ändra</button>
+                <button class="btn-secondary btn-small" onclick="viewSavedInvoice('${inv.id}')">Visa PDF</button>
+            </div>
         `;
         container.appendChild(div);
     });
 }
 
 function startNewInvoice() {
+    editingInvoiceId = null;
+    setFormTitle('Skapa Faktura');
     resetForm();
     loadSavedCustomers();
     
@@ -436,6 +442,54 @@ function startNewInvoice() {
     const invNoEl = document.getElementById('invoice-no');
     if (invNoEl) invNoEl.value = nextNo;
     
+    showView('view-invoice-form');
+}
+
+function setFormTitle(text) {
+    const el = document.getElementById('invoice-form-title');
+    if (el) el.textContent = text;
+}
+
+function setTaxMode(inclusive) {
+    isTaxInclusive = !!inclusive;
+    const toggle = document.getElementById('tax-inclusive-toggle');
+    if (toggle) toggle.checked = isTaxInclusive;
+    document.getElementById('label-exkl')?.classList.toggle('active-label', !isTaxInclusive);
+    document.getElementById('label-inkl')?.classList.toggle('active-label', isTaxInclusive);
+}
+
+// Open an existing invoice in the editor with everything filled in
+window.editSavedInvoice = function(invoiceId) {
+    const inv = invoices.find(i => i.id === invoiceId);
+    if (!inv) return;
+
+    resetForm();
+    loadSavedCustomers();
+    editingInvoiceId = inv.id;
+    setFormTitle(`Ändra Faktura #${inv.no}`);
+
+    const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v ?? ''; };
+    setVal('customer-name', inv.customerName);
+    setVal('customer-no', inv.customerCustNo);
+    setVal('customer-org', inv.customerOrg);
+    setVal('customer-ref', inv.customerRef);
+    setVal('customer-street', inv.customerStreet);
+    setVal('customer-zip', inv.customerZip);
+    setVal('customer-city', inv.customerCity);
+    setVal('invoice-no', inv.no);
+    setVal('invoice-date', inv.date);
+    setVal('due-date', inv.due);
+    updateDaysNetText();
+
+    setTaxMode(inv.isTaxInclusive !== false);
+
+    invoiceItems = (inv.items || []).map((it, idx) => ({
+        ...it,
+        id: it.id || (Date.now().toString() + idx)
+    }));
+    if (invoiceItems.length === 0) addInvoiceItem();
+    else renderItems();
+
     showView('view-invoice-form');
 }
 
@@ -665,7 +719,7 @@ window.addFromMenu = function() {
     }
     
     // Om det finns en tom orginalrad (1 st) tar vi bort den
-    if (invoiceItems.length === 1 && !invoiceItems[0].desc && invoiceItems[0].price === 0) {
+    if (invoiceItems.length === 1 && invoiceItems[0].type !== 'text' && !invoiceItems[0].desc && !invoiceItems[0].price) {
         invoiceItems = [];
     }
     
@@ -719,11 +773,56 @@ function addInvoiceItem() {
     renderItems();
 }
 
+// A free-text line (no price) that can be placed between items, e.g. a date or a note
+window.addTextRow = function() {
+    const id = Date.now().toString() + Math.random().toString().slice(2, 6);
+    invoiceItems.push({ id, type: 'text', desc: '' });
+    renderItems();
+    const inputs = document.querySelectorAll('#invoice-items .item-row:last-child input');
+    if (inputs[0]) inputs[0].focus();
+}
+
 window.removeItem = function(id) {
     if (invoiceItems.length > 1) {
         invoiceItems = invoiceItems.filter(item => item.id !== id);
         renderItems();
     }
+}
+
+// ----- Drag to reorder (mouse + touch via Pointer Events) -----
+function enableRowDragging(container) {
+    container.querySelectorAll('.drag-handle').forEach(handle => {
+        handle.addEventListener('pointerdown', (e) => {
+            const row = handle.closest('.item-row');
+            if (!row) return;
+            e.preventDefault();
+            if (document.activeElement) document.activeElement.blur();
+            // Listen on window: moving the row in the DOM would drop pointer capture on the handle
+            row.classList.add('dragging');
+
+            const onMove = (ev) => {
+                const siblings = Array.from(container.querySelectorAll('.item-row:not(.dragging)'));
+                const after = siblings.find(sib => {
+                    const r = sib.getBoundingClientRect();
+                    return ev.clientY < r.top + r.height / 2;
+                });
+                if (after) container.insertBefore(row, after);
+                else container.appendChild(row);
+            };
+            const onUp = () => {
+                window.removeEventListener('pointermove', onMove);
+                window.removeEventListener('pointerup', onUp);
+                window.removeEventListener('pointercancel', onUp);
+                row.classList.remove('dragging');
+                const order = Array.from(container.querySelectorAll('.item-row')).map(r => r.dataset.id);
+                invoiceItems.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+                renderItems();
+            };
+            window.addEventListener('pointermove', onMove);
+            window.addEventListener('pointerup', onUp);
+            window.addEventListener('pointercancel', onUp);
+        });
+    });
 }
 
 function renderItems() {
@@ -734,22 +833,36 @@ function renderItems() {
 
     invoiceItems.forEach(item => {
         const div = document.createElement('div');
+        div.dataset.id = item.id;
+        const handle = `<span class="drag-handle" title="Dra för att flytta" aria-label="Dra för att flytta">⠿</span>`;
+        if (item.type === 'text') {
+            div.className = 'item-row text-row';
+            div.innerHTML = `
+                ${handle}
+                <input type="text" placeholder="Text (t.ex. datum eller notering)" value="${escapeHtml(item.desc)}" oninput="updateItem('${item.id}', 'desc', this.value)">
+                <button type="button" class="remove-btn" onclick="removeItem('${item.id}')">✕</button>
+            `;
+            container.appendChild(div);
+            return;
+        }
         div.className = 'item-row';
         div.innerHTML = `
-            <input type="text" placeholder="Beskrivning" value="${escapeHtml(item.desc)}" onchange="updateItem('${item.id}', 'desc', this.value)" required>
+            ${handle}
+            <input type="text" placeholder="Beskrivning" value="${escapeHtml(item.desc)}" oninput="updateItem('${item.id}', 'desc', this.value)" required>
             <select onchange="updateItem('${item.id}', 'vat', parseInt(this.value))">
                 <option value="25" ${item.vat === 25 ? 'selected' : ''}>25% Moms</option>
                 <option value="12" ${item.vat === 12 ? 'selected' : ''}>12% Moms</option>
                 <option value="6" ${item.vat === 6 ? 'selected' : ''}>6% Moms</option>
                 <option value="0" ${item.vat === 0 ? 'selected' : ''}>0% Moms</option>
             </select>
-            <input type="number" class="price-input" placeholder="${placeholderText}" value="${item.price || ''}" min="0" step="0.01" onchange="updateItem('${item.id}', 'price', parseFloat(this.value))" required>
-            <input type="number" placeholder="Antal" value="${item.qty}" min="0" step="1" onchange="updateItem('${item.id}', 'qty', parseFloat(this.value))" required>
+            <input type="number" class="price-input" placeholder="${placeholderText}" value="${item.price || ''}" min="0" step="0.01" oninput="updateItem('${item.id}', 'price', parseFloat(this.value))" required>
+            <input type="number" placeholder="Antal" value="${item.qty}" min="0" step="1" oninput="updateItem('${item.id}', 'qty', parseFloat(this.value))" required>
             <button type="button" class="remove-btn" onclick="removeItem('${item.id}')">✕</button>
         `;
         container.appendChild(div);
     });
 
+    enableRowDragging(container);
     calculateTotals();
 }
 
@@ -766,6 +879,7 @@ function calculateTotals() {
     let totalVat = 0;
 
     invoiceItems.forEach(item => {
+        if (item.type === 'text') return;
         const enteredTotal = (item.price || 0) * (item.qty || 0);
         let itemNet = 0;
         let itemVat = 0;
@@ -845,7 +959,9 @@ window.previewInvoice = function() {
     };
     
     // Save invoice
-    const existsIndex = invoices.findIndex(i => i.no === invNo && i.companyId === currentCompany.id);
+    const existsIndex = editingInvoiceId
+        ? invoices.findIndex(i => i.id === editingInvoiceId)
+        : invoices.findIndex(i => i.no === invNo && i.companyId === currentCompany.id);
     if (existsIndex >= 0) {
         invoiceContext.id = invoices[existsIndex].id;
         invoiceContext.firestoreId = invoices[existsIndex].firestoreId;
@@ -853,6 +969,7 @@ window.previewInvoice = function() {
     } else {
         invoices.push(invoiceContext);
     }
+    editingInvoiceId = invoiceContext.id;
 
     saveInvoiceToDb(invoiceContext).catch(err => console.error('Kunde inte spara faktura:', err));
     
@@ -873,8 +990,8 @@ window.viewSavedInvoice = function(invoiceId) {
     
     const backBtn = document.getElementById('btn-preview-back');
     if (backBtn) {
-        backBtn.textContent = '← Gå tillbaka';
-        backBtn.onclick = () => goBack('view-dashboard');
+        backBtn.textContent = '✎ Ändra';
+        backBtn.onclick = () => editSavedInvoice(inv.id);
     }
 
     fillPdfPreview(inv);
@@ -954,6 +1071,13 @@ function fillPdfPreview(inv) {
     
     inv.items.forEach(item => {
         if (!item.desc) return;
+        if (item.type === 'text') {
+            const trText = document.createElement('tr');
+            trText.className = 'pdf-text-row';
+            trText.innerHTML = `<td colspan="5">${escapeHtml(item.desc)}</td>`;
+            tbody.appendChild(trText);
+            return;
+        }
         
         const enteredTotal = (item.price || 0) * (item.qty || 0);
         let itemGross = 0;

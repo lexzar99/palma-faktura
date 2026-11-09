@@ -452,7 +452,7 @@ input:checked + .slider:before {
 
 .item-row {
     display: grid;
-    grid-template-columns: 2fr 1fr 1fr 1fr auto;
+    grid-template-columns: auto 2fr 1fr 1fr 1fr auto;
     gap: 0.5rem;
     margin-bottom: 0.5rem;
     align-items: center;
@@ -792,4 +792,43 @@ input:checked + .slider:before {
     .top-nav {
         padding-top: calc(env(safe-area-inset-top, 0px) + 0.75rem);
     }
+}
+
+/* Drag to reorder + text rows */
+.drag-handle {
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    color: var(--text-muted);
+    font-size: 1.3rem;
+    line-height: 1;
+    padding: 0.4rem 0.3rem;
+    border-radius: 6px;
+}
+.drag-handle:hover { color: var(--primary); background: rgba(245, 166, 35, 0.08); }
+.item-row.dragging {
+    opacity: 0.85;
+    outline: 2px dashed var(--primary);
+    outline-offset: 2px;
+    border-radius: 8px;
+}
+.item-row.dragging .drag-handle { cursor: grabbing; color: var(--primary); }
+.item-row.text-row { grid-template-columns: auto 1fr auto; }
+.item-row.text-row input { font-style: italic; }
+.drag-hint { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.3rem; }
+.row-buttons { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.inv-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
+/* Text line between items on the invoice */
+.pdf-prof-table tr.pdf-text-row td {
+    font-style: italic;
+    font-weight: 600;
+    color: #444;
+    background: #fafafa;
+}
+
+@media (max-width: 600px) {
+    .item-row.text-row { grid-template-columns: auto 1fr auto; }
+    .item-row .drag-handle { justify-self: start; }
 }
