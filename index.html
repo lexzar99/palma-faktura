@@ -1,8 +1,18 @@
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>PALMA Faktura</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌴</text></svg>">
+
+    <!-- PWA -->
+    <meta name="application-name" content="PALMA Faktura">
+    <meta name="theme-color" content="#0D0B14">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Faktura">
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
     <link rel="stylesheet" href="styles.css">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -280,7 +290,7 @@
                     <div class="pdf-prof-header">
                         <div class="sender-info">
                             <h1 id="pdf-sender-name">Palma De lund HB</h1>
-                            <p>kiliansgatan 14<br>223 50 LUND<br>Org.nr: <span id="pdf-sender-org">969790-2923</span></p>
+                            <p>Org.nr: <span id="pdf-sender-org">969790-2923</span></p>
                         </div>
                         <div class="invoice-meta">
                             <h2>FAKTURA</h2>
@@ -379,6 +389,16 @@
             <button class="btn-secondary" style="flex: 0.5;" onclick="closeRentModal()">Avbryt</button>
         </div>
     </div>
-<script src="app.js?v=25.0"></script>
+<script src="app.js?v=26.0"></script>
+<script>
+    // Register service worker (PWA: installable + offline app shell)
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('sw.js').catch((err) => {
+                console.warn('Service worker registration failed:', err);
+            });
+        });
+    }
+</script>
 </body>
 </html>

@@ -509,6 +509,8 @@ input:checked + .slider:before {
     font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     color: #222;
     padding: 22mm 20mm 40mm 20mm; /* Clean margins, extra bottom padding for footer */
+    display: flex;
+    flex-direction: column;
 }
 
 .top-edge-accent {
@@ -589,6 +591,7 @@ input:checked + .slider:before {
     padding: 6px 8px; /* Compact padding */
     text-align: left;
 }
+.pdf-prof-table tr { page-break-inside: avoid; }
 .pdf-prof-table td {
     border-bottom: 1px solid #f2f2f2;
     padding: 5px 8px; /* Extremely compact to fit many items */
@@ -644,8 +647,9 @@ input:checked + .slider:before {
 }
 
 .pdf-prof-footer {
-    position: absolute;
-    bottom: 20mm; left: 20mm; right: 20mm;
+    /* In-flow at the bottom of the page: never overlaps the table or totals, grows with the content */
+    margin-top: auto;
+    flex-shrink: 0;
     border-top: 1px solid #999;
     padding-top: 20px;
     display: flex;
@@ -782,3 +786,10 @@ input:checked + .slider:before {
     line-height: 1.4;
 }
 
+
+/* Installed PWA (standalone): keep the top bar clear of the status bar / notch */
+@media (display-mode: standalone) {
+    .top-nav {
+        padding-top: calc(env(safe-area-inset-top, 0px) + 0.75rem);
+    }
+}

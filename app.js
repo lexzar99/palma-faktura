@@ -312,12 +312,13 @@ async function saveInvoiceToDb(invoiceContext) {
     if (FIREBASE_READY && auth.currentUser) {
         const uid = auth.currentUser.uid;
         const ref = db.collection('users').doc(uid).collection('invoices');
-        // Upsert by invoice id
+        // Upsert by invoice id. firestoreId is local-only, so keep it out of the document.
+        const { firestoreId, ...data } = invoiceContext;
         const existing = invoices.find(i => i.id === invoiceContext.id);
         if (existing && existing.firestoreId) {
-            await ref.doc(existing.firestoreId).set(invoiceContext);
+            await ref.doc(existing.firestoreId).set(data);
         } else {
-            const docRef = await ref.add(invoiceContext);
+            const docRef = await ref.add(data);
             invoiceContext.firestoreId = docRef.id;
         }
     } else {
@@ -703,6 +704,15 @@ window.toggleTaxMode = function() {
     calculateTotals();
 }
 
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 function addInvoiceItem() {
     const id = Date.now().toString() + Math.random().toString().slice(2, 6);
     invoiceItems.push({ id, desc: '', vat: 25, price: 0, qty: 1 });
@@ -726,7 +736,7 @@ function renderItems() {
         const div = document.createElement('div');
         div.className = 'item-row';
         div.innerHTML = `
-            <input type="text" placeholder="Beskrivning" value="${item.desc}" onchange="updateItem('${item.id}', 'desc', this.value)" required>
+            <input type="text" placeholder="Beskrivning" value="${escapeHtml(item.desc)}" onchange="updateItem('${item.id}', 'desc', this.value)" required>
             <select onchange="updateItem('${item.id}', 'vat', parseInt(this.value))">
                 <option value="25" ${item.vat === 25 ? 'selected' : ''}>25% Moms</option>
                 <option value="12" ${item.vat === 12 ? 'selected' : ''}>12% Moms</option>
@@ -836,10 +846,15 @@ window.previewInvoice = function() {
     
     // Save invoice
     const existsIndex = invoices.findIndex(i => i.no === invNo && i.companyId === currentCompany.id);
-    if(existsIndex >= 0) invoices[existsIndex] = invoiceContext;
-    else invoices.push(invoiceContext);
+    if (existsIndex >= 0) {
+        invoiceContext.id = invoices[existsIndex].id;
+        invoiceContext.firestoreId = invoices[existsIndex].firestoreId;
+        invoices[existsIndex] = invoiceContext;
+    } else {
+        invoices.push(invoiceContext);
+    }
 
-    saveInvoiceToDb(invoiceContext);
+    saveInvoiceToDb(invoiceContext).catch(err => console.error('Kunde inte spara faktura:', err));
     
     const backBtn = document.getElementById('btn-preview-back');
     if (backBtn) {
@@ -956,7 +971,7 @@ function fillPdfPreview(inv) {
         
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td>${item.desc}</td>
+            <td>${escapeHtml(item.desc)}</td>
             <td style="text-align: center;">${item.vat}%</td>
             <td style="text-align: right;">${itemNetUnit.toFixed(2)}</td>
             <td style="text-align: right;">${item.qty}</td>
@@ -1014,13 +1029,45 @@ window.exportPDF = function() {
             container.style.marginBottom = oldMargin;
         }
         
-        const imgData = canvas.toDataURL('image/jpeg', 1.0);
         const { jsPDF } = window.jspdf;
         const pdf = new jsPDF('p', 'mm', 'a4');
         const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-        
-        pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+        const pdfPageHeight = pdf.internal.pageSize.getHeight();
+
+        // Canvas pixels per CSS pixel of the A4 paper
+        const pxPerCss = canvas.width / element.offsetWidth;
+        const sliceHeightPx = Math.floor((pdfPageHeight * canvas.width) / pdfWidth);
+
+        // Possible page breaks: bottom edge of every item row, so no row is cut in half
+        const rowBreaks = Array.from(element.querySelectorAll('.pdf-prof-table tbody tr'))
+            .map(tr => {
+                const table = tr.offsetParent;
+                return Math.round((table.offsetTop + tr.offsetTop + tr.offsetHeight) * pxPerCss);
+            })
+            .sort((a, b) => a - b);
+
+        let start = 0;
+        let pageIndex = 0;
+        while (start < canvas.height) {
+            let end = Math.min(start + sliceHeightPx, canvas.height);
+            if (end < canvas.height) {
+                const fitting = rowBreaks.filter(b => b > start && b <= end);
+                if (fitting.length) end = fitting[fitting.length - 1];
+            }
+            const h = end - start;
+            const pageCanvas = document.createElement('canvas');
+            pageCanvas.width = canvas.width;
+            pageCanvas.height = h;
+            const ctx = pageCanvas.getContext('2d');
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, pageCanvas.width, h);
+            ctx.drawImage(canvas, 0, start, canvas.width, h, 0, 0, canvas.width, h);
+
+            if (pageIndex > 0) pdf.addPage();
+            pdf.addImage(pageCanvas.toDataURL('image/jpeg', 1.0), 'JPEG', 0, 0, pdfWidth, (h * pdfWidth) / canvas.width);
+            start = end;
+            pageIndex++;
+        }
         const no = document.getElementById('pdf-no').textContent;
         pdf.save(`Faktura_${no}.pdf`);
     }).catch(err => {
@@ -1154,7 +1201,7 @@ window.generateRentInvoice = function() {
     };
     
     invoices.push(invoiceContext);
-    saveInvoiceToDb(invoiceContext);
+    saveInvoiceToDb(invoiceContext).catch(err => console.error('Kunde inte spara hyresfaktura:', err));
     renderDashboard();
     
     closeRentModal();
