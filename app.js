@@ -1069,8 +1069,10 @@ window.exportPDF = function() {
             const summaryEl = paper.querySelector('.pdf-prof-summary-wrapper');
             const footerEl = paper.querySelector('.pdf-prof-footer');
             if (summaryEl) blocks.push(summaryEl.offsetTop, summaryEl.offsetTop + summaryEl.offsetHeight);
-            if (footerEl) blocks.push(footerEl.offsetTop);
-            layout = { width: paper.offsetWidth, rows, blocks };
+            const footer = footerEl
+                ? { top: footerEl.offsetTop, bottom: footerEl.offsetTop + footerEl.offsetHeight }
+                : null;
+            layout = { width: paper.offsetWidth, rows, blocks, footer };
         }
     };
 
@@ -1092,7 +1094,6 @@ window.exportPDF = function() {
         // Continuation pages (sida 2+) get a header band; content starts below it
         const CONT_TOP = 26;     // mm
         const CONT_BOTTOM = 14;  // mm reserved for the page number
-        const firstPagePx = Math.floor((pageH - CONT_BOTTOM) * pxPerMm);
         const contPagePx = Math.floor((pageH - CONT_TOP - CONT_BOTTOM) * pxPerMm);
 
         // Possible page breaks: bottom of every item row (no row cut in half),
@@ -1102,41 +1103,63 @@ window.exportPDF = function() {
         const lastRowBottom = rowBreaks.length ? rowBreaks[rowBreaks.length - 1] : 0;
         const allBreaks = rowBreaks.concat((layout ? layout.blocks : []).map(toPx)).sort((a, b) => a - b);
 
-        // Decide which part of the canvas goes on each A4 page
-        const segments = [];
-        let start = 0;
-        // Fits on one A4 page (the paper is exactly 297 mm high when short): single page, no splitting
-        if (canvas.height <= Math.ceil(pageH * pxPerMm) + 2) {
-            segments.push({ start: 0, end: canvas.height, hasRows: true });
-            start = canvas.height;
-        }
-        while (start < canvas.height) {
-            const maxPx = segments.length === 0 ? firstPagePx : contPagePx;
-            let end = Math.min(start + maxPx, canvas.height);
-            if (end < canvas.height) {
-                const fitting = allBreaks.filter(b => b > start && b <= end);
-                if (fitting.length) end = fitting[fitting.length - 1];
-            }
-            segments.push({ start, end, hasRows: start < lastRowBottom });
-            start = end;
-        }
-
-        segments.forEach((seg, i) => {
-            if (i > 0) {
-                pdf.addPage();
-                drawContinuationHeader(pdf, invNo, pageW, seg.hasRows);
-            }
-            const h = seg.end - seg.start;
-            const pageCanvas = document.createElement('canvas');
-            pageCanvas.width = canvas.width;
-            pageCanvas.height = h;
-            const ctx = pageCanvas.getContext('2d');
+        // Cuts a horizontal band out of the big canvas as a JPEG
+        const sliceImage = (from, to) => {
+            const h = to - from;
+            const c = document.createElement('canvas');
+            c.width = canvas.width;
+            c.height = h;
+            const ctx = c.getContext('2d');
             ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, pageCanvas.width, h);
-            ctx.drawImage(canvas, 0, seg.start, canvas.width, h, 0, 0, canvas.width, h);
-            const y = i === 0 ? 0 : CONT_TOP;
-            pdf.addImage(pageCanvas.toDataURL('image/jpeg', 1.0), 'JPEG', 0, y, pageW, h / pxPerMm);
-        });
+            ctx.fillRect(0, 0, c.width, h);
+            ctx.drawImage(canvas, 0, from, canvas.width, h, 0, 0, canvas.width, h);
+            return { data: c.toDataURL('image/jpeg', 1.0), hMm: h / pxPerMm };
+        };
+
+        const footerPx = layout && layout.footer
+            ? { top: toPx(layout.footer.top), bottom: toPx(layout.footer.bottom) }
+            : null;
+
+        if (canvas.height <= Math.ceil(pageH * pxPerMm) + 2 || !footerPx) {
+            // Fits on one A4 page (the paper is exactly 297 mm high when short): as-is
+            const img = sliceImage(0, Math.min(canvas.height, Math.ceil(pageH * pxPerMm)));
+            pdf.addImage(img.data, 'JPEG', 0, 0, pageW, img.hMm);
+        } else {
+            // Several pages. Page 1 keeps header, customer and the footer (address, bankgiro,
+            // company info) fixed at the bottom; only item rows and totals continue on page 2+.
+            const FOOTER_BOTTOM = 18; // mm from the page bottom, like the single-page layout
+            const footerImg = sliceImage(footerPx.top, footerPx.bottom);
+            const footerY = pageH - FOOTER_BOTTOM - footerImg.hMm;
+
+            const contentEnd = footerPx.top - 3; // rows + totals, without the footer (and its top border)
+            const firstPagePxFixed = Math.floor((footerY - 4) * pxPerMm);
+            const breaks = allBreaks.filter(b => b < contentEnd);
+
+            const segments = [];
+            let start = 0;
+            while (start < contentEnd) {
+                const maxPx = segments.length === 0 ? firstPagePxFixed : contPagePx;
+                let end = Math.min(start + maxPx, contentEnd);
+                if (end < contentEnd) {
+                    const fitting = breaks.filter(b => b > start && b <= end);
+                    if (fitting.length) end = fitting[fitting.length - 1];
+                }
+                segments.push({ start, end, hasRows: start < lastRowBottom });
+                start = end;
+            }
+
+            segments.forEach((seg, i) => {
+                if (i > 0) {
+                    pdf.addPage();
+                    drawContinuationHeader(pdf, invNo, pageW, seg.hasRows);
+                }
+                const img = sliceImage(seg.start, seg.end);
+                pdf.addImage(img.data, 'JPEG', 0, i === 0 ? 0 : CONT_TOP, pageW, img.hMm);
+                if (i === 0) {
+                    pdf.addImage(footerImg.data, 'JPEG', 0, footerY, pageW, footerImg.hMm);
+                }
+            });
+        }
 
         // "Sida x av N" on every page
         const totalPages = pdf.getNumberOfPages();
