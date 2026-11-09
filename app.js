@@ -1000,6 +1000,43 @@ function fillPdfPreview(inv) {
 // ----------------------------------------------------
 // EXPORT PDF
 // ----------------------------------------------------
+function drawContinuationHeader(pdf, invNo, pageW, withColumns) {
+    const left = 20;
+    const right = pageW - 20;
+    const colFractions = [0.45, 0.10, 0.15, 0.10, 0.20]; // same widths as the HTML table
+    const colW = colFractions.map(f => f * (right - left));
+    const xs = [];
+    let x = left;
+    colW.forEach(w => { xs.push(x); x += w; });
+
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(11);
+    pdf.setTextColor(34, 34, 34);
+    const name = currentCompany ? currentCompany.name : '';
+    pdf.text(`${name} - Faktura ${invNo} (forts.)`, left, 14);
+
+    pdf.setDrawColor(200);
+    pdf.setLineWidth(0.3);
+    pdf.line(left, 17, right, 17);
+    if (!withColumns) {
+        pdf.setFont('helvetica', 'normal');
+        return;
+    }
+
+    pdf.setFillColor(248, 249, 250);
+    pdf.rect(left, 19, right - left, 6, 'F');
+    pdf.setFontSize(7);
+    pdf.setTextColor(68, 68, 68);
+    const yb = 23;
+    pdf.text('BESKRIVNING', xs[0] + 2, yb);
+    pdf.text('MOMS', xs[1] + colW[1] / 2, yb, { align: 'center' });
+    pdf.text('À-PRIS', xs[2] + colW[2] - 2, yb, { align: 'right' });
+    pdf.text('ANTAL', xs[3] + colW[3] - 2, yb, { align: 'right' });
+    pdf.text('BELOPP', xs[4] + colW[4] - 2, yb, { align: 'right' });
+    pdf.line(left, 25.5, right, 25.5);
+    pdf.setFont('helvetica', 'normal');
+}
+
 window.exportPDF = function() {
     const element = document.getElementById('pdf-paper');
     const container = document.getElementById('pdf-scale-container');
@@ -1012,6 +1049,7 @@ window.exportPDF = function() {
         container.style.marginBottom = '0';
     }
     
+    let layout = null;
     const options = {
         scale: 2,
         useCORS: true,
@@ -1019,7 +1057,21 @@ window.exportPDF = function() {
         backgroundColor: '#ffffff',
         logging: false,
         width: 794, // Force capture width
-        windowWidth: 794 // Force A4 width for consistent layout
+        windowWidth: 794, // Force A4 width for consistent layout
+        // Measure page-break positions in the cloned document: that is the layout that ends up in the image
+        // (the live page can differ, e.g. mobile media queries on a narrow screen).
+        onclone: (doc) => {
+            const paper = doc.getElementById('pdf-paper');
+            if (!paper) return;
+            const rows = Array.from(paper.querySelectorAll('.pdf-prof-table tbody tr'))
+                .map(tr => tr.offsetParent.offsetTop + tr.offsetTop + tr.offsetHeight);
+            const blocks = [];
+            const summaryEl = paper.querySelector('.pdf-prof-summary-wrapper');
+            const footerEl = paper.querySelector('.pdf-prof-footer');
+            if (summaryEl) blocks.push(summaryEl.offsetTop, summaryEl.offsetTop + summaryEl.offsetHeight);
+            if (footerEl) blocks.push(footerEl.offsetTop);
+            layout = { width: paper.offsetWidth, rows, blocks };
+        }
     };
 
     html2canvas(element, options).then(canvas => {
@@ -1031,42 +1083,69 @@ window.exportPDF = function() {
         
         const { jsPDF } = window.jspdf;
         const pdf = new jsPDF('p', 'mm', 'a4');
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfPageHeight = pdf.internal.pageSize.getHeight();
+        const pageW = pdf.internal.pageSize.getWidth();   // 210 mm
+        const pageH = pdf.internal.pageSize.getHeight();  // 297 mm
+        const pxPerMm = canvas.width / pageW;
+        const pxPerCss = canvas.width / ((layout && layout.width) || element.offsetWidth);
+        const invNo = document.getElementById('pdf-no').textContent;
 
-        // Canvas pixels per CSS pixel of the A4 paper
-        const pxPerCss = canvas.width / element.offsetWidth;
-        const sliceHeightPx = Math.floor((pdfPageHeight * canvas.width) / pdfWidth);
+        // Continuation pages (sida 2+) get a header band; content starts below it
+        const CONT_TOP = 26;     // mm
+        const CONT_BOTTOM = 14;  // mm reserved for the page number
+        const firstPagePx = Math.floor((pageH - CONT_BOTTOM) * pxPerMm);
+        const contPagePx = Math.floor((pageH - CONT_TOP - CONT_BOTTOM) * pxPerMm);
 
-        // Possible page breaks: bottom edge of every item row, so no row is cut in half
-        const rowBreaks = Array.from(element.querySelectorAll('.pdf-prof-table tbody tr'))
-            .map(tr => {
-                const table = tr.offsetParent;
-                return Math.round((table.offsetTop + tr.offsetTop + tr.offsetHeight) * pxPerCss);
-            })
-            .sort((a, b) => a - b);
+        // Possible page breaks: bottom of every item row (no row cut in half),
+        // around the totals box and before the footer (never split)
+        const toPx = v => Math.round(v * pxPerCss);
+        const rowBreaks = (layout ? layout.rows : []).map(toPx).sort((a, b) => a - b);
+        const lastRowBottom = rowBreaks.length ? rowBreaks[rowBreaks.length - 1] : 0;
+        const allBreaks = rowBreaks.concat((layout ? layout.blocks : []).map(toPx)).sort((a, b) => a - b);
 
+        // Decide which part of the canvas goes on each A4 page
+        const segments = [];
         let start = 0;
-        let pageIndex = 0;
+        // Fits on one A4 page (the paper is exactly 297 mm high when short): single page, no splitting
+        if (canvas.height <= Math.ceil(pageH * pxPerMm) + 2) {
+            segments.push({ start: 0, end: canvas.height, hasRows: true });
+            start = canvas.height;
+        }
         while (start < canvas.height) {
-            let end = Math.min(start + sliceHeightPx, canvas.height);
+            const maxPx = segments.length === 0 ? firstPagePx : contPagePx;
+            let end = Math.min(start + maxPx, canvas.height);
             if (end < canvas.height) {
-                const fitting = rowBreaks.filter(b => b > start && b <= end);
+                const fitting = allBreaks.filter(b => b > start && b <= end);
                 if (fitting.length) end = fitting[fitting.length - 1];
             }
-            const h = end - start;
+            segments.push({ start, end, hasRows: start < lastRowBottom });
+            start = end;
+        }
+
+        segments.forEach((seg, i) => {
+            if (i > 0) {
+                pdf.addPage();
+                drawContinuationHeader(pdf, invNo, pageW, seg.hasRows);
+            }
+            const h = seg.end - seg.start;
             const pageCanvas = document.createElement('canvas');
             pageCanvas.width = canvas.width;
             pageCanvas.height = h;
             const ctx = pageCanvas.getContext('2d');
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, pageCanvas.width, h);
-            ctx.drawImage(canvas, 0, start, canvas.width, h, 0, 0, canvas.width, h);
+            ctx.drawImage(canvas, 0, seg.start, canvas.width, h, 0, 0, canvas.width, h);
+            const y = i === 0 ? 0 : CONT_TOP;
+            pdf.addImage(pageCanvas.toDataURL('image/jpeg', 1.0), 'JPEG', 0, y, pageW, h / pxPerMm);
+        });
 
-            if (pageIndex > 0) pdf.addPage();
-            pdf.addImage(pageCanvas.toDataURL('image/jpeg', 1.0), 'JPEG', 0, 0, pdfWidth, (h * pdfWidth) / canvas.width);
-            start = end;
-            pageIndex++;
+        // "Sida x av N" on every page
+        const totalPages = pdf.getNumberOfPages();
+        for (let page = 1; totalPages > 1 && page <= totalPages; page++) {
+            pdf.setPage(page);
+            pdf.setFont('helvetica', 'normal');
+            pdf.setFontSize(8);
+            pdf.setTextColor(120);
+            pdf.text(`Sida ${page} av ${totalPages}`, pageW - 20, pageH - 8, { align: 'right' });
         }
         const no = document.getElementById('pdf-no').textContent;
         pdf.save(`Faktura_${no}.pdf`);
