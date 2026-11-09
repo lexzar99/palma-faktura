@@ -2,7 +2,7 @@
 // App shell is cached so the app opens offline. Network-first for our own
 // files so deployments show up immediately. Firebase/Google API traffic is
 // never cached (it must always go to the network).
-const CACHE = 'palma-faktura-v27';
+const CACHE = 'palma-faktura-v28';
 const SHELL = [
   './',
   './index.html',

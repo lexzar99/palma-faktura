@@ -355,7 +355,7 @@ window.showView = function(viewId) {
     window.scrollTo(0, 0);
     
     if (viewId === 'view-invoice-preview') {
-        setTimeout(updatePdfScale, 50);
+        setTimeout(renderPreviewPages, 50);
     }
 }
 
@@ -474,6 +474,7 @@ window.editSavedInvoice = function(invoiceId) {
     setVal('customer-org', inv.customerOrg);
     setVal('customer-ref', inv.customerRef);
     setVal('customer-street', inv.customerStreet);
+    setVal('customer-street2', inv.customerStreet2);
     setVal('customer-zip', inv.customerZip);
     setVal('customer-city', inv.customerCity);
     setVal('invoice-no', inv.no);
@@ -520,6 +521,7 @@ window.populateCustomerForm = function() {
         if (document.getElementById('customer-org')) document.getElementById('customer-org').value = '';
         if (document.getElementById('customer-ref')) document.getElementById('customer-ref').value = '';
         if (document.getElementById('customer-street')) document.getElementById('customer-street').value = '';
+        if (document.getElementById('customer-street2')) document.getElementById('customer-street2').value = '';
         if (document.getElementById('customer-zip')) document.getElementById('customer-zip').value = '';
         if (document.getElementById('customer-city')) document.getElementById('customer-city').value = '';
         return;
@@ -532,6 +534,7 @@ window.populateCustomerForm = function() {
         if (document.getElementById('customer-org')) document.getElementById('customer-org').value = formatOrgNo(cust.org) || '';
         if (document.getElementById('customer-ref')) document.getElementById('customer-ref').value = cust.ref || '';
         if (document.getElementById('customer-street')) document.getElementById('customer-street').value = cust.street || '';
+        if (document.getElementById('customer-street2')) document.getElementById('customer-street2').value = cust.street2 || '';
         if (document.getElementById('customer-zip')) document.getElementById('customer-zip').value = formatZipCode(cust.zip) || '';
         if (document.getElementById('customer-city')) document.getElementById('customer-city').value = cust.city || '';
     }
@@ -548,6 +551,7 @@ function saveCustomerIfNeeded(custData) {
             org: formatOrgNo(custData.org),
             ref: custData.ref,
             street: custData.street,
+            street2: custData.street2 || '',
             zip: formatZipCode(custData.zip),
             city: custData.city
         };
@@ -590,6 +594,8 @@ function resetForm() {
     if (refEl) refEl.value = '';
     const streetEl = document.getElementById('customer-street');
     if (streetEl) streetEl.value = '';
+    const street2El = document.getElementById('customer-street2');
+    if (street2El) street2El.value = '';
     const zipEl = document.getElementById('customer-zip');
     if (zipEl) zipEl.value = '';
     const cityEl = document.getElementById('customer-city');
@@ -925,6 +931,7 @@ window.previewInvoice = function() {
         org: formatOrgNo(document.getElementById('customer-org').value),
         ref: document.getElementById('customer-ref').value,
         street: document.getElementById('customer-street').value,
+        street2: document.getElementById('customer-street2')?.value || '',
         zip: formatZipCode(document.getElementById('customer-zip').value),
         city: document.getElementById('customer-city').value
     };
@@ -950,6 +957,7 @@ window.previewInvoice = function() {
         customerOrg: custData.org,
         customerRef: custData.ref,
         customerStreet: custData.street,
+        customerStreet2: custData.street2,
         customerZip: custData.zip,
         customerCity: custData.city,
         items: JSON.parse(JSON.stringify(invoiceItems)),
@@ -1025,6 +1033,11 @@ function fillPdfPreview(inv) {
     if (pdfCustOrg) pdfCustOrg.textContent = inv.customerOrg ? `Org.nr: ${formatOrgNo(inv.customerOrg)}` : '';
     const pdfCustStreet = document.getElementById('pdf-customer-street');
     if (pdfCustStreet) pdfCustStreet.textContent = inv.customerStreet;
+    const pdfCustStreet2 = document.getElementById('pdf-customer-street2');
+    if (pdfCustStreet2) {
+        pdfCustStreet2.textContent = inv.customerStreet2 || '';
+        pdfCustStreet2.style.display = inv.customerStreet2 ? '' : 'none';
+    }
     
     // Combine Zip and City: 224 77 Lund
     const pdfCustZipCity = document.getElementById('pdf-customer-zipcity');
@@ -1124,67 +1137,75 @@ function fillPdfPreview(inv) {
 // ----------------------------------------------------
 // EXPORT PDF
 // ----------------------------------------------------
-function drawContinuationHeader(pdf, invNo, pageW, withColumns) {
-    const left = 20;
-    const right = pageW - 20;
-    const colFractions = [0.45, 0.10, 0.15, 0.10, 0.20]; // same widths as the HTML table
-    const colW = colFractions.map(f => f * (right - left));
+// ----------------------------------------------------
+// A4 PAGES (shared by the on-screen preview and the PDF download)
+// ----------------------------------------------------
+const A4_W_MM = 210;
+const A4_H_MM = 297;
+
+// Header on continuation pages (sida 2+), drawn straight onto the page canvas
+function drawContinuationHeader(ctx, mm, invNo, withColumns) {
+    const left = 20 * mm;
+    const right = (A4_W_MM - 20) * mm;
+    const width = right - left;
+
+    ctx.fillStyle = '#222222';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    ctx.font = `bold ${3.9 * mm}px Helvetica, Arial, sans-serif`;
+    const name = currentCompany ? currentCompany.name : '';
+    ctx.fillText(`${name} - Faktura ${invNo} (forts.)`, left, 14 * mm);
+
+    ctx.fillStyle = '#c8c8c8';
+    ctx.fillRect(left, 17 * mm, width, 0.3 * mm);
+    if (!withColumns) return;
+
+    // Column headings, same widths as the HTML table
+    const fractions = [0.45, 0.10, 0.15, 0.10, 0.20];
     const xs = [];
     let x = left;
-    colW.forEach(w => { xs.push(x); x += w; });
+    fractions.forEach(f => { xs.push(x); x += f * width; });
+    const colW = fractions.map(f => f * width);
 
-    pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(11);
-    pdf.setTextColor(34, 34, 34);
-    const name = currentCompany ? currentCompany.name : '';
-    pdf.text(`${name} - Faktura ${invNo} (forts.)`, left, 14);
-
-    pdf.setDrawColor(200);
-    pdf.setLineWidth(0.3);
-    pdf.line(left, 17, right, 17);
-    if (!withColumns) {
-        pdf.setFont('helvetica', 'normal');
-        return;
-    }
-
-    pdf.setFillColor(248, 249, 250);
-    pdf.rect(left, 19, right - left, 6, 'F');
-    pdf.setFontSize(7);
-    pdf.setTextColor(68, 68, 68);
-    const yb = 23;
-    pdf.text('BESKRIVNING', xs[0] + 2, yb);
-    pdf.text('MOMS', xs[1] + colW[1] / 2, yb, { align: 'center' });
-    pdf.text('À-PRIS', xs[2] + colW[2] - 2, yb, { align: 'right' });
-    pdf.text('ANTAL', xs[3] + colW[3] - 2, yb, { align: 'right' });
-    pdf.text('BELOPP', xs[4] + colW[4] - 2, yb, { align: 'right' });
-    pdf.line(left, 25.5, right, 25.5);
-    pdf.setFont('helvetica', 'normal');
+    ctx.fillStyle = '#f8f9fa';
+    ctx.fillRect(left, 19 * mm, width, 6 * mm);
+    ctx.fillStyle = '#444444';
+    ctx.font = `bold ${2.5 * mm}px Helvetica, Arial, sans-serif`;
+    const yb = 23 * mm;
+    const pad = 2 * mm;
+    ctx.textAlign = 'left';   ctx.fillText('BESKRIVNING', xs[0] + pad, yb);
+    ctx.textAlign = 'center'; ctx.fillText('MOMS', xs[1] + colW[1] / 2, yb);
+    ctx.textAlign = 'right';  ctx.fillText('À-PRIS', xs[2] + colW[2] - pad, yb);
+    ctx.fillText('ANTAL', xs[3] + colW[3] - pad, yb);
+    ctx.fillText('BELOPP', xs[4] + colW[4] - pad, yb);
+    ctx.fillStyle = '#c8c8c8';
+    ctx.fillRect(left, 25.5 * mm, width, 0.3 * mm);
+    ctx.textAlign = 'left';
 }
 
-window.exportPDF = function() {
+// Renders #pdf-paper and splits it into A4 page images (JPEG data URLs).
+// Page 1 keeps header, customer and footer (address, bankgiro, company info);
+// only item rows and totals continue on page 2+.
+async function buildInvoicePages() {
     const element = document.getElementById('pdf-paper');
-    const container = document.getElementById('pdf-scale-container');
-    const oldTransform = container ? container.style.transform : 'none';
-    const oldMargin = container ? container.style.marginBottom : '0';
-    
-    // Reset scale for high-res capture
-    if (container) {
-        container.style.transform = 'none';
-        container.style.marginBottom = '0';
-    }
-    
     let layout = null;
-    const options = {
+
+    const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
         allowTaint: true,
         backgroundColor: '#ffffff',
         logging: false,
-        width: 794, // Force capture width
-        windowWidth: 794, // Force A4 width for consistent layout
-        // Measure page-break positions in the cloned document: that is the layout that ends up in the image
-        // (the live page can differ, e.g. mobile media queries on a narrow screen).
+        width: 794,        // A4 width at 96 dpi
+        windowWidth: 794,  // lay out as A4, also on phones
         onclone: (doc) => {
+            // The paper is kept invisible on screen (the preview shows page images instead): show it in the clone
+            const holder = doc.getElementById('pdf-scale-container');
+            if (holder) {
+                holder.classList.remove('capture-only');
+                holder.style.transform = 'none';
+            }
+            // Measure page-break positions here: this is the layout that ends up in the image
             const paper = doc.getElementById('pdf-paper');
             if (!paper) return;
             const rows = Array.from(paper.querySelectorAll('.pdf-prof-table tbody tr'))
@@ -1198,136 +1219,146 @@ window.exportPDF = function() {
                 : null;
             layout = { width: paper.offsetWidth, rows, blocks, footer };
         }
+    });
+
+    const invNo = document.getElementById('pdf-no').textContent;
+    const mm = canvas.width / A4_W_MM;                 // canvas px per mm
+    const pageHpx = Math.round(A4_H_MM * mm);
+    const pxPerCss = canvas.width / ((layout && layout.width) || element.offsetWidth || 794);
+    const toPx = v => Math.round(v * pxPerCss);
+
+    const CONT_TOP = 26;    // mm, content start on continuation pages
+    const CONT_BOTTOM = 14; // mm, reserved for the page number
+    const FOOTER_BOTTOM = 18; // mm, footer distance from the bottom of page 1
+
+    const rowBreaks = (layout ? layout.rows : []).map(toPx).sort((a, b) => a - b);
+    const lastRowBottom = rowBreaks.length ? rowBreaks[rowBreaks.length - 1] : 0;
+    const allBreaks = rowBreaks.concat((layout ? layout.blocks : []).map(toPx)).sort((a, b) => a - b);
+    const footerPx = layout && layout.footer
+        ? { top: toPx(layout.footer.top), bottom: toPx(layout.footer.bottom) }
+        : null;
+
+    const newPage = () => {
+        const c = document.createElement('canvas');
+        c.width = canvas.width;
+        c.height = pageHpx;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, c.width, c.height);
+        return { c, ctx };
+    };
+    const blit = (ctx, from, to, y) => {
+        const h = to - from;
+        if (h > 0) ctx.drawImage(canvas, 0, from, canvas.width, h, 0, y, canvas.width, h);
     };
 
-    html2canvas(element, options).then(canvas => {
-        // Restore scale
-        if (container) {
-            container.style.transform = oldTransform;
-            container.style.marginBottom = oldMargin;
-        }
-        
-        const { jsPDF } = window.jspdf;
-        const pdf = new jsPDF('p', 'mm', 'a4');
-        const pageW = pdf.internal.pageSize.getWidth();   // 210 mm
-        const pageH = pdf.internal.pageSize.getHeight();  // 297 mm
-        const pxPerMm = canvas.width / pageW;
-        const pxPerCss = canvas.width / ((layout && layout.width) || element.offsetWidth);
-        const invNo = document.getElementById('pdf-no').textContent;
+    const pages = [];
+    if (canvas.height <= pageHpx + 2 || !footerPx) {
+        // Fits on one A4 page
+        const { c, ctx } = newPage();
+        blit(ctx, 0, Math.min(canvas.height, pageHpx), 0);
+        pages.push(c);
+    } else {
+        const footerH = footerPx.bottom - footerPx.top;
+        const footerY = pageHpx - Math.round(FOOTER_BOTTOM * mm) - footerH;
+        const contentEnd = footerPx.top - 3; // rows + totals, without the footer and its top border
+        const firstMax = footerY - Math.round(4 * mm);
+        const contMax = Math.floor((A4_H_MM - CONT_TOP - CONT_BOTTOM) * mm);
+        const breaks = allBreaks.filter(b => b < contentEnd);
 
-        // Continuation pages (sida 2+) get a header band; content starts below it
-        const CONT_TOP = 26;     // mm
-        const CONT_BOTTOM = 14;  // mm reserved for the page number
-        const contPagePx = Math.floor((pageH - CONT_TOP - CONT_BOTTOM) * pxPerMm);
-
-        // Possible page breaks: bottom of every item row (no row cut in half),
-        // around the totals box and before the footer (never split)
-        const toPx = v => Math.round(v * pxPerCss);
-        const rowBreaks = (layout ? layout.rows : []).map(toPx).sort((a, b) => a - b);
-        const lastRowBottom = rowBreaks.length ? rowBreaks[rowBreaks.length - 1] : 0;
-        const allBreaks = rowBreaks.concat((layout ? layout.blocks : []).map(toPx)).sort((a, b) => a - b);
-
-        // Cuts a horizontal band out of the big canvas as a JPEG
-        const sliceImage = (from, to) => {
-            const h = to - from;
-            const c = document.createElement('canvas');
-            c.width = canvas.width;
-            c.height = h;
-            const ctx = c.getContext('2d');
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, c.width, h);
-            ctx.drawImage(canvas, 0, from, canvas.width, h, 0, 0, canvas.width, h);
-            return { data: c.toDataURL('image/jpeg', 1.0), hMm: h / pxPerMm };
-        };
-
-        const footerPx = layout && layout.footer
-            ? { top: toPx(layout.footer.top), bottom: toPx(layout.footer.bottom) }
-            : null;
-
-        if (canvas.height <= Math.ceil(pageH * pxPerMm) + 2 || !footerPx) {
-            // Fits on one A4 page (the paper is exactly 297 mm high when short): as-is
-            const img = sliceImage(0, Math.min(canvas.height, Math.ceil(pageH * pxPerMm)));
-            pdf.addImage(img.data, 'JPEG', 0, 0, pageW, img.hMm);
-        } else {
-            // Several pages. Page 1 keeps header, customer and the footer (address, bankgiro,
-            // company info) fixed at the bottom; only item rows and totals continue on page 2+.
-            const FOOTER_BOTTOM = 18; // mm from the page bottom, like the single-page layout
-            const footerImg = sliceImage(footerPx.top, footerPx.bottom);
-            const footerY = pageH - FOOTER_BOTTOM - footerImg.hMm;
-
-            const contentEnd = footerPx.top - 3; // rows + totals, without the footer (and its top border)
-            const firstPagePxFixed = Math.floor((footerY - 4) * pxPerMm);
-            const breaks = allBreaks.filter(b => b < contentEnd);
-
-            const segments = [];
-            let start = 0;
-            while (start < contentEnd) {
-                const maxPx = segments.length === 0 ? firstPagePxFixed : contPagePx;
-                let end = Math.min(start + maxPx, contentEnd);
-                if (end < contentEnd) {
-                    const fitting = breaks.filter(b => b > start && b <= end);
-                    if (fitting.length) end = fitting[fitting.length - 1];
-                }
-                segments.push({ start, end, hasRows: start < lastRowBottom });
-                start = end;
+        const segments = [];
+        let start = 0;
+        while (start < contentEnd) {
+            const max = segments.length === 0 ? firstMax : contMax;
+            let end = Math.min(start + max, contentEnd);
+            if (end < contentEnd) {
+                const fitting = breaks.filter(b => b > start && b <= end);
+                if (fitting.length) end = fitting[fitting.length - 1];
             }
-
-            segments.forEach((seg, i) => {
-                if (i > 0) {
-                    pdf.addPage();
-                    drawContinuationHeader(pdf, invNo, pageW, seg.hasRows);
-                }
-                const img = sliceImage(seg.start, seg.end);
-                pdf.addImage(img.data, 'JPEG', 0, i === 0 ? 0 : CONT_TOP, pageW, img.hMm);
-                if (i === 0) {
-                    pdf.addImage(footerImg.data, 'JPEG', 0, footerY, pageW, footerImg.hMm);
-                }
-            });
+            segments.push({ start, end, hasRows: start < lastRowBottom });
+            start = end;
         }
 
-        // "Sida x av N" on every page
-        const totalPages = pdf.getNumberOfPages();
-        for (let page = 1; totalPages > 1 && page <= totalPages; page++) {
-            pdf.setPage(page);
-            pdf.setFont('helvetica', 'normal');
-            pdf.setFontSize(8);
-            pdf.setTextColor(120);
-            pdf.text(`Sida ${page} av ${totalPages}`, pageW - 20, pageH - 8, { align: 'right' });
-        }
-        const no = document.getElementById('pdf-no').textContent;
-        pdf.save(`Faktura_${no}.pdf`);
-    }).catch(err => {
-        if (container) {
-            container.style.transform = oldTransform;
-            container.style.marginBottom = oldMargin;
-        }
-        console.error("PDF Export Error:", err);
-        alert("Kunde inte skapa PDF.");
-    });
+        segments.forEach((seg, i) => {
+            const { c, ctx } = newPage();
+            if (i === 0) {
+                blit(ctx, seg.start, seg.end, 0);
+                blit(ctx, footerPx.top, footerPx.bottom, footerY);
+            } else {
+                drawContinuationHeader(ctx, mm, invNo, seg.hasRows);
+                blit(ctx, seg.start, seg.end, Math.round(CONT_TOP * mm));
+            }
+            pages.push(c);
+        });
+
+        // "Sida x av N"
+        pages.forEach((c, i) => {
+            const ctx = c.getContext('2d');
+            ctx.fillStyle = '#787878';
+            ctx.font = `${2.9 * mm}px Helvetica, Arial, sans-serif`;
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'alphabetic';
+            ctx.fillText(`Sida ${i + 1} av ${pages.length}`, (A4_W_MM - 20) * mm, (A4_H_MM - 8) * mm);
+        });
+    }
+
+    return { invNo, pages: pages.map(c => c.toDataURL('image/jpeg', 0.95)) };
 }
 
-function updatePdfScale() {
-    const wrapper = document.querySelector('.pdf-wrapper');
-    const container = document.getElementById('pdf-scale-container');
-    const paper = document.getElementById('pdf-paper');
-    if (!wrapper || !container || !paper) return;
+// ----- On-screen preview: show the real A4 pages -----
+let previewPages = null;   // { invNo, pages } for the invoice currently in the preview
+let previewToken = 0;
 
-    const wrapperWidth = wrapper.offsetWidth;
-    const paperWidth = 794; // Fixed A4 width at 96dpi (210mm)
-    
-    if (wrapperWidth < (paperWidth + 40)) {
-        const scale = (wrapperWidth - 40) / paperWidth;
-        container.style.transform = `scale(${scale})`;
-        // Compensate for the height shrink after scaling
-        const scaledHeight = paper.offsetHeight * scale;
-        container.style.marginBottom = `-${paper.offsetHeight - scaledHeight - 40}px`;
-    } else {
-        container.style.transform = 'none';
-        container.style.marginBottom = '40px';
+async function renderPreviewPages() {
+    const token = ++previewToken;
+    previewPages = null;
+    const pagesEl = document.getElementById('pdf-pages');
+    if (!pagesEl) return;
+    pagesEl.innerHTML = '<p class="pdf-pages-loading">Skapar förhandsvisning…</p>';
+    try {
+        if (document.fonts && document.fonts.ready) await document.fonts.ready;
+        const result = await buildInvoicePages();
+        if (token !== previewToken) return; // another invoice was opened meanwhile
+        previewPages = result;
+        pagesEl.innerHTML = '';
+        result.pages.forEach((src, i) => {
+            const page = document.createElement('div');
+            page.className = 'pdf-page';
+            const img = document.createElement('img');
+            img.src = src;
+            img.alt = `Sida ${i + 1} av ${result.pages.length}`;
+            page.appendChild(img);
+            if (result.pages.length > 1) {
+                const label = document.createElement('div');
+                label.className = 'pdf-page-label';
+                label.textContent = `Sida ${i + 1} av ${result.pages.length}`;
+                page.appendChild(label);
+            }
+            pagesEl.appendChild(page);
+        });
+    } catch (err) {
+        if (token !== previewToken) return;
+        console.error('Preview Error:', err);
+        pagesEl.innerHTML = '<p class="pdf-pages-loading">Kunde inte visa förhandsvisningen.</p>';
     }
 }
 
-window.addEventListener('resize', updatePdfScale);
+// ----- Download -----
+window.exportPDF = async function() {
+    try {
+        const result = previewPages || await buildInvoicePages();
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        result.pages.forEach((src, i) => {
+            if (i > 0) pdf.addPage();
+            pdf.addImage(src, 'JPEG', 0, 0, A4_W_MM, A4_H_MM);
+        });
+        pdf.save(`Faktura_${result.invNo}.pdf`);
+    } catch (err) {
+        console.error("PDF Export Error:", err);
+        alert("Kunde inte skapa PDF.");
+    }
+}
 
 // ----------------------------------------------------
 // RENT INVOICE MODAL

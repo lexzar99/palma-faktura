@@ -832,3 +832,46 @@ input:checked + .slider:before {
     .item-row.text-row { grid-template-columns: auto 1fr auto; }
     .item-row .drag-handle { justify-self: start; }
 }
+
+/* Preview: real A4 pages */
+.pdf-wrapper {
+    position: relative;
+    overflow: hidden;
+    flex-direction: column;
+    align-items: center;
+}
+.pdf-scale-container.capture-only {
+    position: absolute;
+    top: 0;
+    left: 0;
+    opacity: 0;
+    pointer-events: none;
+    z-index: -1;
+}
+.pdf-pages {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 28px;
+    padding: 0 1rem;
+}
+.pdf-page { width: 100%; max-width: 794px; }
+.pdf-page img {
+    display: block;
+    width: 100%;
+    height: auto;
+    background: #fff;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
+.pdf-page-label {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    margin-top: 0.5rem;
+}
+.pdf-pages-loading {
+    color: var(--text-muted);
+    padding: 3rem 0;
+    text-align: center;
+}

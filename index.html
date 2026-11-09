@@ -168,6 +168,12 @@
                         </div>
                     </div>
                     <div class="row">
+                        <div class="input-group full">
+                            <label for="customer-street2">Adressrad 2 (frivilligt)</label>
+                            <input type="text" id="customer-street2" placeholder="t.ex. Box 907, c/o, avdelning">
+                        </div>
+                    </div>
+                    <div class="row">
                         <div class="input-group half">
                             <label for="customer-zip">Postnummer</label>
                             <input type="text" id="customer-zip" required placeholder="123 45">
@@ -286,8 +292,10 @@
         </div>
 
         <div class="pdf-wrapper">
-            <!-- Scaling container for mobile -->
-            <div id="pdf-scale-container" class="pdf-scale-container">
+            <!-- The preview shows the real A4 pages (same as the PDF) -->
+            <div id="pdf-pages" class="pdf-pages"></div>
+            <!-- Source paper: invisible on screen, rendered into the A4 pages -->
+            <div id="pdf-scale-container" class="pdf-scale-container capture-only">
                 <div id="pdf-paper" class="a4-page prof-design">
                     <div class="top-edge-accent"></div>
                     
@@ -315,6 +323,7 @@
                                 <h4 id="pdf-customer-name">Kundnamn</h4>
                                 <p id="pdf-customer-org"></p>
                                 <p id="pdf-customer-street"></p>
+                                <p id="pdf-customer-street2"></p>
                                 <p id="pdf-customer-zipcity"></p>
                             </div>
                         </div>
@@ -393,7 +402,7 @@
             <button class="btn-secondary" style="flex: 0.5;" onclick="closeRentModal()">Avbryt</button>
         </div>
     </div>
-<script src="app.js?v=27.0"></script>
+<script src="app.js?v=28.0"></script>
 <script>
     // Register service worker (PWA: installable + offline app shell)
     if ('serviceWorker' in navigator) {
